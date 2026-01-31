@@ -64,30 +64,17 @@ def get_layer_indices(n_layers: int, f_start: float, f_end: float, n_extract: in
 
 # --- Model Loading ---
 
-def load_gemma(device="cuda", use_flash_attn: bool = True, compile_model: bool = True):
-    """Load google/gemma-3-1b-it with Flash Attention 2 and torch.compile if available."""
+def load_gemma(device="cuda", compile_model: bool = True):
+    """Load google/gemma-3-1b-it with SDPA and torch.compile if available."""
     model_id = "google/gemma-3-1b-it"
     tokenizer = AutoTokenizer.from_pretrained(model_id)
 
-    # Try Flash Attention 2, fall back to SDPA, then default
-    attn_impl = None
-    if use_flash_attn:
-        try:
-            import flash_attn  # noqa: F401
-            attn_impl = "flash_attention_2"
-            print(f"[MODEL] Using Flash Attention 2")
-        except ImportError:
-            attn_impl = "sdpa"  # PyTorch 2.0+ scaled dot product attention
-            print(f"[MODEL] Flash Attention not installed, using SDPA")
-
-    load_kwargs = {
-        "torch_dtype": torch.bfloat16,
-        "device_map": device,
-    }
-    if attn_impl:
-        load_kwargs["attn_implementation"] = attn_impl
-
-    model = AutoModelForCausalLM.from_pretrained(model_id, **load_kwargs)
+    model = AutoModelForCausalLM.from_pretrained(
+        model_id,
+        torch_dtype=torch.bfloat16,
+        device_map=device,
+        attn_implementation="sdpa",
+    )
 
     # Compile model for faster inference (PyTorch 2.0+)
     if compile_model:
